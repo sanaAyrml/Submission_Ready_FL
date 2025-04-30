@@ -1,0 +1,53 @@
+# only has to pass for python 3.10
+name: Static code checks
+
+on:
+  push:
+    branches:
+      main
+  pull_request:
+    branches:
+      main
+
+jobs:
+  run-code-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install and configure Poetry
+        uses: snok/install-poetry@v1
+        with:
+          virtualenvs-create: true
+          virtualenvs-in-project: true
+      - name: Set up cache
+        uses: actions/cache@v4
+        id: cached-poetry-dependencies
+        with:
+          path: .venv
+          key: venv-${{ runner.os }}-${{ steps.full-python-version.outputs.version }}-${{ hashFiles('**/poetry.lock') }}
+      - name: Install dependencies
+        run: poetry install --with "dev, test, codestyle"
+        if: steps.cached-poetry-dependencies.outputs.cache-hit != 'true'
+      - name: Pre-commit Checks
+        run: |
+          source .venv/bin/activate
+          pre-commit run --all-files
+      - name: pip-audit (gh-action-pip-audit)
+        uses: pypa/gh-action-pip-audit@v1.1.0
+        with:
+          virtual-environment: .venv/
+          # GHSA-cjgq-5qmw-rcj6 is a Keras vulnerability that has no fix yet
+          # PYSEC-2024-109 requires upgrading to DeepSpeed 0.15.1, which is currently blocked by pycyclops
+          # GHSA-3749-ghw9-m3mg and GHSA-887c-mr87-cxwp are pytorch vulnerabilities that have no fix yet
+          # GHSA-53q9-r3pm-6pq6 is a pytorch vulnerability that has a fix in 2.6.0 which we can't upgrade to just yet
+          ignore-vulns: |
+            GHSA-cjgq-5qmw-rcj6
+            PYSEC-2024-109
+            GHSA-3749-ghw9-m3mg
+            GHSA-887c-mr87-cxwp
+            GHSA-53q9-r3pm-6pq6
